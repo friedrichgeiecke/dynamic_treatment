@@ -23,40 +23,39 @@ import datetime
 
 
 
-# Creating a class for the function approximator objects
+# Creating a class for the function approximators
 class function_approximators():
 
     # Initialising values
-    def __init__(self, number_of_states, number_of_states_w, number_of_actions):
+    def __init__(self, number_of_states_theta, number_of_states_w):
 
         # Initialise parameters
-        self.number_of_states = number_of_states
-        self.number_of_states_w = int(number_of_states/2)
-        self.number_of_actions = number_of_actions
+        self.number_of_states_theta = number_of_states_theta
+        self.number_of_states_w = number_of_states_w
         self.delta_prime = 0
-        self.theta = [0] * (self.number_of_states*(self.number_of_actions-1)) # will be replaced with a shared object between subprocesses
+        self.theta = [0] * (self.number_of_states_w) # will be replaced with a shared object between subprocesses
         self.w = [0] * self.number_of_states_w # ditto
 
-    # Evaluating the policy function
-    def pi(self, s):
+    # Policy function
+    def pi(self, s_theta):
 
-        h = np.dot(s[:,0], self.theta[:]) # np dot products can deal with lists. Have to use [:] here because theta will be a shared object from the multiprocessing module
+        h = np.dot(s_theta[:,0], self.theta[:]) # np dot products can deal with lists. Have to use [:] here because theta will be a shared list object from the multiprocessing module
 
         treat_prob = 1 - (1/(1 + np.exp(-h)))
 
         return treat_prob
 
 
-    #Evaluating the value function
-    def v(self, s_prime_w):
+    # Value function
+    def v(self, s_w):
 
-        output = np.dot(s_prime_w[:,0], self.w[:])
+        output = np.dot(s_w[:,0], self.w[:])
 
         return output
 
 
     # Gradient of the log policy
-    def gradient_log_pi(self, s, a):
+    def gradient_log_pi(self, s_theta, a):
 
         """
 
@@ -65,13 +64,19 @@ class function_approximators():
 
         """
 
-        output = (-(a-self.pi(s))*s)[:,0]
+        output = (-(a-self.pi(s_theta))*s_theta)[:,0]
 
         return output
 
 
-    #Bellman error
+    # TD error
     def update_delta_prime(self, R, gamma, s_w, s_prime_w, terminal_flag):
+
+        """
+
+        In the final period, the TD error is set to zero
+
+        """
 
         if terminal_flag == False:
 
@@ -88,31 +93,33 @@ class function_approximators():
 
         Note:
 
-            - s is the state of the policy function (should be s_theta in clean notation)
+            - s_theta is the state of the policy function
             - s_w is the state of the value function
 
             - self.delta_prime is just a float, which is update by the delta prime update function
 
         """
 
-        #print("Reached value update which is {}".format(alpha_w*I*self.delta_prime*s_w[:,0]))
-
         # Updating parameter values of the estimator
         return(alpha_w*I*self.delta_prime*s_w[:,0])
 
 
     # Compute update for the policy function
-    def compute_policy_parameter_update(self, alpha_theta, s, a, I):
+    def compute_policy_parameter_update(self, alpha_theta, s_theta, a, I):
 
         # Updating parameter values of the estimator
 
-        #print("Reached policy update which is {}".format(alpha_theta*I*self.delta_prime*self.gradient_log_pi(s, a)))
 
-        return(alpha_theta*I*self.delta_prime*self.gradient_log_pi(s, a))
-
+        return(alpha_theta*I*self.delta_prime*self.gradient_log_pi(s_theta, a))
 
 
-## Subprocess function
+##
+## Continue rewriting from here before turning to name __main__. Remember to rename s into s_theta etc. in the subprocess funcion etc.
+##
+
+
+
+# This function simulates the entire environment in a sub process
 def launch_one_actor_critic_process(mp_w_array,
                                     mp_theta_array,
                                     mp_current_episode,
