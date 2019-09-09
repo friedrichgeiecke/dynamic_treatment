@@ -2,9 +2,9 @@
 # Importing modules
 import matplotlib.pyplot as plt
 plt.switch_backend('agg')
-plt.style.use("ggplot")
+plt.style.use('seaborn')
+sns.set_palette('colorblind')
 import seaborn as sns
-sns.set_palette("husl")
 from matplotlib import colors
 import numpy as np
 import pandas as pd
@@ -115,6 +115,7 @@ class function_approximators():
 
 ##
 ## Continue rewriting from here before turning to name __main__. Remember to rename s into s_theta etc. in the subprocess funcion etc.
+## Once rewritten this function, delete this commend and make commit to repo
 ##
 
 
@@ -129,12 +130,23 @@ def launch_one_actor_critic_process(mp_w_array,
                                     batch_size):
 
 
+    """
+
+    Calling this function launches a subprocess. There three particular subprocesses that have additional tasks
+
+    # Subprocess 1: runs evaluation episodes with a fixed policy
+    # Subprocess 2: keeps track of the current learning episode (process 1 is much slower as it evaluates in between). This is needed to create correct plots.
+    # Subprocess 3: saves parameter paths to disk (this also makes it a bit slower which is why it is not used to keep track of time in the other processes)
+
+    """
+
+
     # Beginning of the subprocess
-    print("Parallel actor-critic process {} launched..".format(process_number))
+    log_status.info(f"Parallel actor-critic process {process_number} launched..")
 
     # Evaluation cumulative reward array (only used by process 1)
     reward_list_for_evaluation = []
-    last_eval = 1
+    last_eval = 1 # used to determine the nan elements between evaluation values and updated at every eval
     final_eval_period_flag = False
 
     # Setting a threat specific seed
@@ -148,7 +160,13 @@ def launch_one_actor_critic_process(mp_w_array,
     ee = 0
     while ee < EE:
 
-        print("Starting episode {} in process {}".format(ee+1, process_number))
+
+        ##
+        ## Training
+        ##
+
+
+        log_status.info(f"Starting episode {ee+1} in process {process_number}")
         tic = time_package.time()
 
         # Still at an early period only updaing value function?
@@ -175,12 +193,11 @@ def launch_one_actor_critic_process(mp_w_array,
 
         # Initialise with first person from first cluster
         s0 = cluster_dict[0].loc[0,['age', 'education', 'prev_earnings']].values.reshape(3,1)
-        # Adding interactions
-        s = np.vstack((s0, s0*budget_left, s0*np.cos(2*pi*time), 0.1, budget_left, np.cos(2*pi*time) ))
+        # Building basis functions
+        s_theta = np.vstack((1, s0, s0*budget_left, s0*np.cos(2*pi*time), budget_left, np.cos(2*pi*time) ))
         s_w =   np.vstack((budget_left, budget_left*np.sin(2*pi*time), np.cos(2*pi*time)*budget_left,
                            np.cos(2*pi*time)*budget_left**2, budget_left**2, budget_left**3, budget_left**4 ))
         s_R_if_treated = cluster_dict[0].loc[0,reward_column_name]
-        #s_compprob = cluster_dict[0].loc[0,'compProp']
 
 
         # Re-setting the terminal flag to False
@@ -189,23 +206,26 @@ def launch_one_actor_critic_process(mp_w_array,
         # Loop over people within episode as long as we are not in a terminal episode
         while terminal_flag == False:
 
+            # Setting the batch update sums to zero
             batch_sum_value_updates = np.zeros([rows_w,])
             batch_sum_policy_updates = np.zeros([rows_theta,])
 
+            # Loop of batch elements
             for bb in range(0, batch_size):
 
-                treatment_probability = function_approximators_object.pi(s)
+                # Sample action from current policy
+                treatment_probability = function_approximators_object.pi(s_theta)
                 a = np.random.binomial(1, treatment_probability)
 
+                # Set reward to zero if not treated and otherwise to 1
                 if a == 0:
 
                     R = 0
 
-                elif a == 1 and budget_left > cost_per_treatment:
+                # Otherwise update reward, people treated, and budget left
+                elif a == 1:
 
                     R = s_R_if_treated
-
-                    #print(s_R_if_treated) # for debugging
 
                     people_treated += 1
 
@@ -215,109 +235,109 @@ def launch_one_actor_critic_process(mp_w_array,
                 # Updating the people count within the episode
                 people_considered_for_treatment += 1
 
-
                 # Draw new waiting time vector lambda
+                # -> It is divided by the amount of time units per day (100 in our case). Reason: Lambdas are estimated from daily empirical frequencies,
+                # as we have 100 time units per day in our discretisation, this yields the amount of people expected per time increment
                 lambda_vector = (np.exp(alpha_vector + (beta_vector * np.sin(time)) + (gamma_vector * np.cos(time))) / lambda_normalisation).reshape(4,1)
-
 
                 # Summed lambda vector
                 summed_lambda_vector = np.sum(lambda_vector)
 
                 # Updating time
-                delta_time = (math.ceil(np.random.exponential(scale=1/summed_lambda_vector, size=None))/time_grid_normalisation)
 
-                #print(delta_time) # debugging
-
+                # The lambda fed into an exponential from which now a time increment will be drawn. As lambda is of the scale arrivals per 100th day,
+                # the drawn time will be in the same time units. So a drawn value could be 50 as in 50 time units or half a day 50/100. Yet, our time
+                # is in years, so we need to transform the drawn time into years. Hence we divide it first by 100 to have days, and then by 252 to have years.
+                # This is why time_grid_normalisation has a value of 25200
+                delta_time = (math.ceil(np.random.exponential(scale=1/summed_lambda_vector, size=None)) / time_grid_normalisation)
                 time = time + delta_time
 
+                # Probably not necessary
                 if time > 1:
 
                     time -= 1
 
-                # Creating a period specific discounting factor gamma
+                # Creating discounting factor gamma that is time increment specific
                 gamma = np.exp(- beta * delta_time)
 
-
-                # Obtaining from which cluster the next person arrives
+                # Drawing the cluster from which the next person arrives
                 cluster = np.dot(np.array([0, 1, 2, 3]), np.random.multinomial(1, pvals = (lambda_vector/summed_lambda_vector).reshape(4,)))
 
-
-                # Obtaining the next state
+                # Drawing the next individual
                 sample_person_index = int(np.random.choice(range(0,cluster_dict[cluster].shape[0]), size=1))
                 s_prime0 = cluster_dict[cluster].loc[sample_person_index,['age', 'education', 'prev_earnings']].values.reshape(3,1)
 
-                # Adding interactions
-                s_prime = np.vstack(( s_prime0, s_prime0*budget_left, s_prime0*np.cos(2*pi*time), 0.1, budget_left, np.cos(2*pi*time) ))
-                s_prime_w =  np.vstack((budget_left, budget_left*np.sin(2*pi*time), np.cos(2*pi*time)*budget_left,
+                # Building basis functions
+                s_theta_prime = np.vstack((1, s_prime0, s_prime0*budget_left, s_prime0*np.cos(2*pi*time), budget_left, np.cos(2*pi*time) ))
+                s_w_prime =  np.vstack((budget_left, budget_left*np.sin(2*pi*time), np.cos(2*pi*time)*budget_left,
                                         np.cos(2*pi*time)*budget_left**2, budget_left**2, budget_left**3, budget_left**4 ))
                 s_R_if_treated = cluster_dict[cluster].loc[sample_person_index,reward_column_name]
-                #s_compprob = cluster_dict[cluster].loc[sample_person_index,'compProp']
-
 
                 # Updating the terminal flag
                 if budget_left < cost_per_treatment:
 
                     terminal_flag = True
                     toc = time_package.time()
-                    print("Ended episode {} in process {} which took approximately {} seconds. {} people where considered for treatment in this episode, and {} were treated, until the budget was {}".format(ee+1, process_number, np.round(toc-tic, 2), people_considered_for_treatment, people_treated, budget_left))
+                    log_status.info(f"Ended episode {ee+1} in process {process_number} which took approximately {(toc-tic):.2f} seconds. {people_considered_for_treatment} people where considered for treatment in this episode, and {people_treated} were treated, until the budget was {budget_left}")
 
                     # Incrementing the episode by 1
                     ee += 1
 
+                    # Process 2 counts the current learning episodes in the processes other than 1 & 3 (which are slower)
                     if process_number == 2:
 
                         mp_current_episode.value = mp_current_episode.value + 1
 
-
-
-                    break # additionally braking the for loop for the batches
-                    #print(time)
+                    break # additionally braking the for loop of the batches if budget ran out
 
                 # Summing up updates for this batch
 
-                # 1. Update backpropagation delta
-                function_approximators_object.update_delta_prime(R, gamma, s_w, s_prime_w, terminal_flag)
+                # 1. Update TD error
+                function_approximators_object.update_delta_prime(R, gamma, s_w, s_w_prime, terminal_flag)
 
                 # 2. Decide whether to update the policy parameters
                 theta_eval_index = np.random.binomial(1, theta_eval_prob)
                 if theta_eval_index == 1:
 
                     # Updating cumulative policy updates
-                    #print("The batch sum policy update is: {}".format(batch_sum_policy_updates))
-                    batch_sum_policy_updates += function_approximators_object.compute_policy_parameter_update(alpha_theta_in_use, s, a, I)
+                    batch_sum_policy_updates += function_approximators_object.compute_policy_parameter_update(alpha_theta_in_use, s_theta, a, I)
 
                 # 3. Update value function parameters
                 batch_sum_value_updates += function_approximators_object.compute_value_parameter_update(alpha_w, s_w, I)
 
-                # Updating I
+                # Updating the cumulative discount factor I
                 I = gamma*I
 
                 # Reassigning state vectors
-                s_w = s_prime_w
-                s = s_prime
+                s_w = s_w_prime
+                s_theta = s_theta_prime
 
             # After batch is completed, add the cumulative updates to the
             # multi process share parameter objects
-            #print("The batch sum value updates are {}".format(batch_sum_value_updates)) # for debugging
+            #log_status.info(f"The batch sum value updates are {batch_sum_value_updates}") # for debugging
             mp_w_array[:] = (np.array(mp_w_array[:]) + batch_sum_value_updates).tolist()
-            #print("The batch sum policy updates are {}".format(batch_sum_policy_updates)) # for debugging
+            #log_status.info(f"The batch sum policy updates are {batch_sum_policy_updates}") # for debugging
             mp_theta_array[:] = (np.array(mp_theta_array[:]) + batch_sum_policy_updates).tolist()
 
-            #print("The value function parameter array has values {}".format(mp_w_array[:]))
-            #print("The policy function parameter array has values {}".format(mp_theta_array[:]))
+            # Also for debugging
+            #log_status.info(f"The value function parameter array has values {mp_w_array[:]}")
+            #log_status.info(f"The policy function parameter array has values {mp_theta_array[:]}")
 
 
-        # Saving parameter paths with one of the subprocesses
+        # Process 3 saves current parameters for every episode
         if process_number == 3:
 
+            # In episode 1, an array with no rows will be created and as many columns as parameters in the policy function
             if ee == 1:
 
                 policy_parameter_array = np.ones([0, len(function_approximators_object.theta[:])])
-                np.savetxt('policy_parameter_path_{}_rewards.csv'.format(reward_column_name), policy_parameter_array, delimiter=',')
+                np.savetxt(os.path.join(output_directory, f'policy_parameter_path_{reward_column_name}_rewards.csv'), policy_parameter_array, delimiter=',')
 
+
+            # In subsequent episodes, this array will be loaded, updated with the current parameter values, and saved again
             else:
 
-                policy_parameter_array = np.loadtxt('policy_parameter_path_{}_rewards.csv'.format(reward_column_name), delimiter=',')
+                policy_parameter_array = np.loadtxt(os.path.join(output_directory, f'policy_parameter_path_{reward_column_name}_rewards.csv'), delimiter=',')
                 if len(policy_parameter_array.shape) == 1:
 
                     policy_parameter_array = policy_parameter_array.reshape(1, policy_parameter_array.shape[0])
@@ -325,16 +345,25 @@ def launch_one_actor_critic_process(mp_w_array,
             copy_parameters = deepcopy(function_approximators_object.theta[:])
 
             policy_parameter_array = np.vstack([policy_parameter_array, np.array(copy_parameters).reshape(1, len(copy_parameters))])
-            np.savetxt('policy_parameter_path_{}_rewards.csv'.format(reward_column_name), policy_parameter_array, delimiter=',')
+            np.savetxt(os.path.join(output_directory, f'policy_parameter_path_{reward_column_name}_rewards.csv'), policy_parameter_array, delimiter=',')
 
 
 
+        # Creating a copy of the current episode of training
         current_ee_representative_process = int(deepcopy(mp_current_episode.value))
 
-        # Terminating also process 1 [and 3 which saves parameters] if all other processes have finished (it breaks its big while loop; otherwise, only process 1 continues to update and it looks as if parameters converged)
+        # Process 1 and 3 are slower than the others as they are doing additional tasks (running evaluation episodes, saving policy paths)
+        # Hence, their training loops are terminated as soon as the other processes reached EE episodes of training
         if (process_number == 1 or process_number == 3) and current_ee_representative_process == EE:
 
             break
+
+
+
+
+        ##
+        ## Policy evaluation part
+        ##
 
 
         if process_number == 1 and (ee == 1 or (current_ee_representative_process % evaluation_every_nn_episodes == 0)) and final_eval_period_flag == False:
@@ -356,19 +385,21 @@ def launch_one_actor_critic_process(mp_w_array,
             rewards_these_eval_episodes = []
             rewards_this_eval_episode = 0
 
+            # Saving a local copy of the current policy function parameters
             local_copy_policy_parameters = deepcopy(function_approximators_object.theta[:])
 
 
-            def local_copy_policy_function(s, parameters):
+            # Creating a policy function which uses these parameters
+            def local_copy_policy_function(s_theta, parameters):
 
-                h = np.dot(s[:,0], parameters)
+                h = np.dot(s_theta[:,0], parameters)
 
                 treat_prob = 1 - (1/(1 + np.exp(-h)))
 
                 return treat_prob
 
 
-            print("Evaluation episode in process {} started after {} episodes of training in the parallel actor critic model.".format(process_number, current_ee))
+            log_status.info(f"Evaluation episode in process {process_number} started after {current_ee} episodes of training in the parallel actor critic model.")
 
             for evaluation_episode in range(0, evaluation_episodes):
 
@@ -391,7 +422,7 @@ def launch_one_actor_critic_process(mp_w_array,
                 # Initialise with first person from first cluster
                 s0 = cluster_dict[0].loc[0,['age', 'education', 'prev_earnings']].values.reshape(3,1)
                 # Adding interactions
-                s = np.vstack(( s0, s0*budget_left, s0*np.cos(2*pi*time), 0.1, budget_left, np.cos(2*pi*time) ))
+                s_theta = np.vstack((1, s0, s0*budget_left, s0*np.cos(2*pi*time), budget_left, np.cos(2*pi*time) ))
                 s_w =  np.vstack((budget_left, budget_left*np.sin(2*pi*time), np.cos(2*pi*time)*budget_left,
                                   np.cos(2*pi*time)*budget_left**2, budget_left**2, budget_left**3, budget_left**4 ))
                 s_R_if_treated = cluster_dict[0].loc[0,reward_column_name]
@@ -404,9 +435,6 @@ def launch_one_actor_critic_process(mp_w_array,
                 # Loop over people within episode as long as we are not in a terminal episode
                 while terminal_flag == False:
 
-                    batch_sum_value_updates = np.zeros([rows_w,])
-                    batch_sum_policy_updates = np.zeros([rows_theta,])
-
                     for bb in range(0, batch_size):
 
                         if ee == 1:
@@ -415,7 +443,7 @@ def launch_one_actor_critic_process(mp_w_array,
 
                         else:
 
-                            treatment_probability = local_copy_policy_function(s, local_copy_policy_parameters)
+                            treatment_probability = local_copy_policy_function(s_theta, local_copy_policy_parameters)
 
                         a = np.random.binomial(1, treatment_probability)
 
@@ -467,8 +495,8 @@ def launch_one_actor_critic_process(mp_w_array,
                         s_prime0 = cluster_dict[cluster].loc[sample_person_index,['age', 'education', 'prev_earnings']].values.reshape(3,1)
 
                         # Adding interactions
-                        s_prime = np.vstack((s_prime0, s_prime0*budget_left, s_prime0*np.cos(2*pi*time), 0.1, budget_left, np.cos(2*pi*time) ))
-                        s_prime_w =  np.vstack((budget_left, budget_left*np.sin(2*pi*time), np.cos(2*pi*time)*budget_left,
+                        s_theta_prime = np.vstack((1, s_prime0, s_prime0*budget_left, s_prime0*np.cos(2*pi*time), budget_left, np.cos(2*pi*time) ))
+                        s_w_prime =  np.vstack((budget_left, budget_left*np.sin(2*pi*time), np.cos(2*pi*time)*budget_left,
                                                 np.cos(2*pi*time)*budget_left**2, budget_left**2, budget_left**3, budget_left**4 ))
                         s_R_if_treated = cluster_dict[cluster].loc[sample_person_index,reward_column_name]
                         #s_compprob = cluster_dict[cluster].loc[sample_person_index,'compProp']
@@ -479,22 +507,22 @@ def launch_one_actor_critic_process(mp_w_array,
 
                             terminal_flag = True
                             toc = time_package.time()
-                            print("Current evaluation ee is: {}. Ended evaluation episode {} in process {} which took approximately {} seconds. {} people where considered for treatment in this episode, and {} were treated, until the budget was {}".format(current_ee, evaluation_episode+1, process_number, np.round(toc-tic, 2), people_considered_for_treatment, people_treated, budget_left))
+                            log_status.info("Current evaluation ee is: {current_ee}. Ended evaluation episode {evaluation_episode+1} in process {process_number} which took approximately {toc-tic:.2f} seconds. {people_considered_for_treatment} people where considered for treatment in this episode, and {people_treated} were treated, until the budget was {budget_left}")
+
                             break # additionally braking the for loop for the batches
-                            #print(time)
+                            #log_status.info(time)
 
 
                         # Updating I
                         I = gamma*I
 
                         # Reassigning state vectors
-                        s_w = s_prime_w
-                        s = s_prime
+                        s_w = s_w_prime
+                        s_theta = s_theta_prime
 
 
                 rewards_these_eval_episodes.append(rewards_this_eval_episode)
 
-            #print(rewards_these_eval_episodes) # for debugging
 
             # For the very first evaluation, average rewards are added that have been precomputed as averages over many episodes
             # Unhash and change evaluation_every_nn_episodes to very high number when determinin random policy benchmark
@@ -532,8 +560,8 @@ def launch_one_actor_critic_process(mp_w_array,
             x_axis_range = list(range(1, (len(reward_list_for_evaluation)+1)))
 
             # Printing x and y
-            #print(x_axis_range)
-            #print(reward_list_for_evaluation)
+            #log_status.info(x_axis_range)
+            #log_status.info(reward_list_for_evaluation)
 
             x_array = np.array(x_axis_range).astype(np.double)
             y_array = np.array(reward_list_for_evaluation).astype(np.double)
@@ -550,15 +578,15 @@ def launch_one_actor_critic_process(mp_w_array,
             plt.figure(figsize=(12,4))
             plt.plot(x_array[y_mask], y_array[y_mask], linestyle='--', marker='o')
             plt.title('Reward trajectory')
-            plt.ylabel('Average cumulative episode reward achieved'.format(evaluation_every_nn_episodes))
-            plt.xlabel('Episodes approximately trained in each of {} parallel threads'.format(n_parallel_processes))
-            plt.savefig('current_reward_trajectory_{}_rewards.png'.format(reward_column_name), dpi = 300) # saved into data directory
+            plt.ylabel('Average cumulative episode reward achieved')
+            plt.xlabel('Episodes approximately trained in each of {n_parallel_processes} parallel threads')
+            plt.savefig(os.path.join(data_directory, f'current_reward_trajectory_{reward_column_name}_rewards.pdf'), dpi = 300) # saved into data directory
             # plt.show() # muted on fabian
 
             # Saving an extra plot after 1000's of episodes
-            if int(current_ee) % 1000 == 0:
+            if int(current_ee) % 10000 == 0:
 
-                plt.savefig('reward_trajectory_{}_rewards_after_{}_episodes.png'.format(reward_column_name, int(current_ee)), dpi = 300) # save extra plot every x-1000 episodes
+                plt.savefig(os.path.join(data_directory, f'reward_trajectory_{reward_column_name}_rewards_after_{int(current_ee)}_episodes.pdf'), dpi = 300) # save extra plot every x-1000 episodes
 
 
 
@@ -566,25 +594,43 @@ def launch_one_actor_critic_process(mp_w_array,
 
 if __name__ == "__main__":
 
-# To do:
-#
-# 1) Even with a lot of evaluation periods, the random policy initial period reward seems quite different. Maybe recompute this.
-# Furthermore, the numbers are not the same despite the same seed
-#
-
-# Setting a seed
-np.random.seed(seed=42)
-
-current_date = datetime.datetime.now()
-current_date = str(current_date)[:-7].replace('-','_').replace(' ','_').replace(':','_')
-
-data_directory = '/users/geieckef/dynamic_treatment/data/'
-output_directory = f'/users/geieckef/dynamic_treatment/run_{current_date}/'
+    # To do:
+    #
+    # 1) Even with a lot of evaluation periods, the random policy initial period reward seems quite different. Maybe recompute this with 20k eval episodes to see whether it is the same.
 
 
+    # Creating a logger which tracks the process
+    programme = os.path.basename(sys.argv[0])
+    log_status = logging.getLogger(programme)
+    logging.basicConfig(format='%(asctime)s: %(message)s')
+    logging.root.setLevel(level=logging.INFO)
+    log_status.info("running %s" % ' '.join(sys.argv))
 
 
-# Continue rewriting from here
+    # Setting a seed
+    np.random.seed(seed=42)
+
+    # Input and output folders
+    current_date = datetime.datetime.now()
+    current_date = str(current_date)[:-7].replace('-','_').replace(' ','_').replace(':','_')
+    data_directory = '/users/geieckef/dynamic_treatment/data/'
+    output_directory = f'/users/geieckef/dynamic_treatment/run_{current_date}/'
+
+    # Loading data
+
+    # RCT data
+    df = pd.read_csv(os.path.join(data_directory, "data_lpe2.csv"))
+
+    # Estimated arrival rates
+    poisson_table = pd.read_csv(os.path.join(data_directory, "sincos_poisson_means_clusters9.csv"), sep='\t')
+
+
+# Continue rewriting from here. Set all hyper-parameters etc and write them into a txt file in the folder of the current run.
+# Also add a line to this txt file with the spec of the value and of the polciy function (needs to be changed manually whenever these are changed in the code later)
+# Alternatively, build a transformation function that is updated and call it also here
+
+
+
 
 
 
@@ -671,10 +717,10 @@ scaler = StandardScaler()
 scaler.fit(df.loc[:,["age", "education", "prev_earnings"]])
 df.loc[:,["age", "education", "prev_earnings"]] = scaler.transform(df.loc[:,["age", "education", "prev_earnings"]])
 df[reward_column_name] = df[reward_column_name]/(1000*np.std(df[reward_column_name]))
-print(np.mean(df["prev_earnings"]))
-print(np.std(df["prev_earnings"]))
-print(np.mean(df[reward_column_name]))
-print(np.std(df[reward_column_name]))
+log_status.info(np.mean(df["prev_earnings"]))
+log_status.info(np.std(df["prev_earnings"]))
+log_status.info(np.mean(df[reward_column_name]))
+log_status.info(np.std(df[reward_column_name]))
 
 
 # In[39]:
@@ -724,7 +770,7 @@ working_days_per_year = 252
 #working_days_per_year = 248
 
 # Time grid normalisation constant
-time_grid_normalisation = 25200
+time_grid_normalisation = 25200 # (so 252 working days each with 100 time intervals)
 #time_grid_normalisation = 24800
 
 # Lamda normalisation
@@ -792,8 +838,9 @@ for p in processes:
 
 
 
+
 #
 #
-# Current question: Why does the doubly robust estimate evaluate after 90 periods rather than 100? The plain OLS evaluates after exaclty 100 episodes.
+# Question from past runs: Why does the doubly robust estimate evaluate after 90 periods rather than 100? The plain OLS evaluates after exaclty 100 episodes.
 #
 #
