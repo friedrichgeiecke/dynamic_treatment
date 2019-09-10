@@ -817,7 +817,6 @@ if __name__ == "__main__":
 
     # Determining the amount of parallel processe to run
     n_parallel_processes = max(1, cpu_count() - 1)
-    n_parallel_processes = 4
 
 
     ##
@@ -951,5 +950,3 @@ if __name__ == "__main__":
 
     # Update that the script is finished
     log_status.info('Training completed.')
-
-    
