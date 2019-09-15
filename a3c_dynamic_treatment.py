@@ -4,7 +4,6 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 plt.switch_backend('agg')
 plt.style.use('seaborn')
-sns.set_palette('colorblind')
 import numpy as np
 import pandas as pd
 import os
@@ -246,15 +245,13 @@ def launch_one_actor_critic_process(mp_w_array,
                 # Updating the people count within the episode
                 people_considered_for_treatment += 1
 
-                # Draw new waiting time vector lambda
-                # -> It is divided by the amount of time units per day (100 in our case). Reason: Lambdas are estimated from daily empirical frequencies,
-                # as we have 100 time units per day in our discretisation, this yields the amount of people expected per time increment
+                # For each cluster, draw the expected number of people arriving per 100th of a day
                 lambda_vector = (np.exp(alpha_vector + (beta_vector * np.sin(time)) + (gamma_vector * np.cos(time))) / lambda_normalisation).reshape(4,1)
 
-                # Summed lambda vector
+                # Summed lambda vector: The expected number of people (irrespective of clusters) arriving in a 100th of a day
                 summed_lambda_vector = np.sum(lambda_vector)
 
-                # Updating time
+                # Updating time (t' and budget_left' are already needed for the function approximator updates of this period)
 
                 # The lambda fed into an exponential from which now a time increment will be drawn. As lambda is of the scale arrivals per 100th day,
                 # the drawn time will be in the same time units. So a drawn value could be 50 as in 50 time units or half a day 50/100. Yet, our time
@@ -268,7 +265,7 @@ def launch_one_actor_critic_process(mp_w_array,
 
                     time -= 1
 
-                # Creating discounting factor gamma that is time increment specific
+                # Creating discounting factor gamma that is time increment specific (discounting is actually only updated after the function approximator updates of that episode)
                 gamma = np.exp(- beta * delta_time)
 
                 # Drawing the cluster from which the next person arrives
@@ -303,7 +300,7 @@ def launch_one_actor_critic_process(mp_w_array,
 
                     break # additionally braking the for loop of the batches if budget ran out
 
-                # Summing up updates for this batch
+                # Adding the period to this batch's updates
 
                 # 1. Update TD error
                 function_approximators_object.update_delta_prime(R, gamma, s_w, s_w_prime, terminal_flag)
@@ -383,6 +380,7 @@ def launch_one_actor_critic_process(mp_w_array,
         # in evaluation below or the next episode as most variables here are in the main functions environment.
         # Make code more functional in the future to avoid such hacks
         s0 = 42
+        s0_prime = 42
         s_w = 42
         s_w_prime = 42
         s_theta = 42
@@ -495,12 +493,10 @@ def launch_one_actor_critic_process(mp_w_array,
                         # Collecting the total episode reward for evaluation
                         rewards_this_eval_episode += I*R
 
-
                         # Updating the people count within the episode
                         people_considered_for_treatment += 1
 
-
-                        # Draw new waiting time vector lambda
+                        # For each cluster, draw the expected number of people arriving per 100th of a day
                         lambda_vector = (np.exp(alpha_vector + (beta_vector * np.sin(time)) + (gamma_vector * np.cos(time))) / lambda_normalisation).reshape(4,1)
 
                         # Summed lambda vector
@@ -541,7 +537,7 @@ def launch_one_actor_critic_process(mp_w_array,
 
                             terminal_flag = True
                             toc = time_package.time()
-                            log_status.info(f"Currently evaluating policy after {current_ee} episodes of training: Ended evaluation episode {evaluation_episode+1} in process {process_number} which took approximately {toc-tic:.2f} seconds. {people_considered_for_treatment} people where considered for treatment in this episode, and {people_treated} were treated, until the budget was {budget_left:.2f}")
+                            log_status.info(f"Currently evaluating policy after {current_ee} episodes of training: Ended evaluation episode {evaluation_episode+1} in process {process_number} which took approximately {toc-tic:.2f} seconds. {people_considered_for_treatment} people where considered for treatment in this episode, and {people_treated} were treated, until the budget was {budget_left:.2f}. The cumulative reward achieved in the episode was {np.sum(rewards_this_eval_episode):.6f}.")
 
                             break # additionally braking the for loop for the batches
                             #log_status.info(time)
@@ -555,28 +551,27 @@ def launch_one_actor_critic_process(mp_w_array,
                         s_theta = s_theta_prime
 
 
-                rewards_these_eval_episodes.append(rewards_this_eval_episode)
+                rewards_these_eval_episodes.append(np.sum(rewards_this_eval_episode))
 
 
             # For the very first evaluation, average rewards are added that have been precomputed as averages over many episodes
-            # Unhash and change evaluation_every_nn_episodes to very high number when determinin random policy benchmark
+            # Uncomment and change evaluation_episodes to very high number when determining random policy benchmark
             #if current_ee == 1:
             #
-            #    np.savetxt('random_policy_reward_mean_{}_over_{}_episodes.csv'.format(reward_column_name, evaluation_every_nn_episodes), np.array([np.mean(rewards_these_eval_episodes)]), delimiter=',')
+            #    np.savetxt(os.path.join(output_directory, f'random_policy_reward_mean_{reward_column_name}_over_{evaluation_episodes}_episodes.csv'), np.array([np.mean(rewards_these_eval_episodes)]), delimiter=',')
 
 
             if current_ee == 1:
 
                 if reward_column_name == "Rlr1":
 
-                    # Value obtained as an average of 500 evaluation episodes with 0.5/0.5 policy
-                    reward_mean_these_eval_episodes = 1.21061062127504
-
+                    # Value obtained as an average of 50,000 evaluation episodes with 0.5/0.5 policy
+                    reward_mean_these_eval_episodes = 0.189183378881113
 
                 if reward_column_name == "d_rob_ols_Xfit":
 
-                    # Value obtained as an average of 10,000 evaluation episodes with 0.5/0.5 policy
-                    reward_mean_these_eval_episodes = 0.0216010850940042
+                    # Value obtained as an average of 50,000 evaluation episodes with 0.5/0.5 policy
+                    reward_mean_these_eval_episodes = 0.00332432576796589
 
 
             # For subsequent evaluation episodes, average rewards are computed over a list of length 'evaluation_episodes'
@@ -604,9 +599,12 @@ def launch_one_actor_critic_process(mp_w_array,
             # Normalising current reward arrays for plotting
             y_array = y_array / y_array[0]
 
+            # Setting the colour palette
+            colour_palette_in_use = sns.color_palette("husl", 12)
+
             # Plotting the figure
             fig = plt.figure(figsize=(12,4))
-            plt.plot(x_array[y_mask], y_array[y_mask], linestyle='--', marker='o')
+            plt.plot(x_array[y_mask], y_array[y_mask], linestyle='--', marker='o', color = colour_palette_in_use[8])
             plt.title('\nReward trajectory\n')
             plt.ylabel('Average cumulative episode reward achieved\n')
             plt.xlabel(f'\nEpisodes approximately trained in each of {n_parallel_processes} parallel processes')
@@ -673,7 +671,7 @@ if __name__ == "__main__":
     reward_normalisation = 6400
 
     ## Total episodes
-    EE = 100100 # ensures that a figure exists for exactly 100,000 episodes
+    EE = 101000 # ensures that a figure exists for exactly 100,000 episodes
 
     # Costs per treatment
     cost_per_treatment = 1/6400
@@ -683,7 +681,6 @@ if __name__ == "__main__":
 
     # Empirical cost of treatment
     empirical_cost_of_treatment = 774
-
 
 
     ##
@@ -707,9 +704,10 @@ if __name__ == "__main__":
         batch_size = 128
 
         # Evaluation specifics
-        evaluation_episodes = 5
-        evaluation_every_nn_episodes = 100 # works because N evaluation episode take less time than N training episodes because no function approximator updates happen in evaluation
+        evaluation_episodes = 500
+        evaluation_every_nn_episodes = 500 # works because N evaluation episode take less time than N training episodes because no function approximator updates happen in evaluation
 
+        # 5 / 100 worked well, the above is just for creating robust baseline rewards for the random policy
 
 
     # Doubly robust OLS cross fitted rewards
@@ -719,7 +717,7 @@ if __name__ == "__main__":
         reward_column_name = "d_rob_ols_Xfit"
 
         # Learning rates
-        alpha_theta = 0.1 # 0.075/0.2 workds with EE = 100,000 and batch_size = 128
+        alpha_theta = 0.1 #
         alpha_w = 0.2 #
 
         # Batch size
@@ -728,6 +726,7 @@ if __name__ == "__main__":
         # Evaluation specifics
         evaluation_episodes = 500
         evaluation_every_nn_episodes = 500 # works because N evaluation episode take less time than N training episodes because no function approximator updates happen in evaluation
+
 
 
     #############################################################################################################################
@@ -757,12 +756,12 @@ if __name__ == "__main__":
     current_date = str(current_date)[:-7].replace('-','_').replace(' ','_').replace(':','')
 
     # Change only this line
-    local_directory = '/Users/friedrich/Documents/research_repos/dynamic_treatment/'
-    # /users/geieckef/dynamic_treatment/ # on fabian
+    #local_directory = '/Users/friedrich/Documents/research_repos/dynamic_treatment/'
+    local_directory = '/users/geieckef/dynamic_treatment/' # on fabian
 
     # Folder paths
     data_directory = os.path.join(local_directory, 'data')
-    output_directory = os.path.join(local_directory, f'run_{current_date}')
+    output_directory = os.path.join(local_directory, f'outcomes/run_{current_date}')
     backup_directory = os.path.join(output_directory, 'backups')
 
     # Creating folders
@@ -792,6 +791,9 @@ if __name__ == "__main__":
     # Subtracting the cost from the reward column
     df[reward_column_name] = df[reward_column_name] - empirical_cost_of_treatment # with 774 being the cost of treatment
 
+    # Preserving the non standardised rewards
+    df['rewards_before_standardisation'] = deepcopy(df[reward_column_name])
+
     # Scaling reward by its standard deviation and an additional normalisation
     df[reward_column_name] = df[reward_column_name]/(reward_normalisation*np.std(df[reward_column_name]))
 
@@ -817,6 +819,7 @@ if __name__ == "__main__":
 
     # Determining the amount of parallel processe to run
     n_parallel_processes = max(1, cpu_count() - 1)
+    #n_parallel_processes = 3 for debugging and evaluation runs
 
 
     ##
