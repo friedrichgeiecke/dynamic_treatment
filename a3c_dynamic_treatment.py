@@ -882,7 +882,7 @@ if __name__ == "__main__":
     Total budget: {total_budget}
 
 
-    Cost per treatment: {cost_per_treatment:.4f}
+    Cost per treatment: {cost_per_treatment:.10f}
 
 
     Time increments per day: {time_increments_per_day}
@@ -912,6 +912,8 @@ if __name__ == "__main__":
 
     run_specifications.close()
 
+
+    # Note: Because numbers are pretty small, digits have been added to the cost of treatment to clearly identify the fraction
 
 
     ##
