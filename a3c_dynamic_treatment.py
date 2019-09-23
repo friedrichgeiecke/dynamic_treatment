@@ -155,6 +155,7 @@ def launch_one_actor_critic_process(mp_w_array,
     # Evaluation cumulative reward array (only used by process 1)
     reward_list_for_evaluation = []
     last_eval = 1 # used to determine the nan elements between evaluation values and updated at every eval
+    last_plot = 0
     final_eval_period_flag = False
 
     # Setting a thread specific seed
@@ -358,11 +359,11 @@ def launch_one_actor_critic_process(mp_w_array,
             np.savetxt(os.path.join(output_directory, f'policy_parameter_path_{reward_column_name}_rewards.csv'), policy_parameter_array, delimiter=',')
 
             # Saving a backup plot each few thousand observations
-            if ee % 5000 == 0:
+            if ee % 2500 == 0:
 
                 # Note: They will not contain current_ee coefficient path steps, because the process saving them is actually slower than the other processes
                 # Hence, say the coefficient saved at step 80,000 could be the values achieved after 100,000 episodes of training in the other processes
-                np.savetxt(os.path.join(backup_directory, f'policy_parameter_path_{reward_column_name}_rewards_backup_after_{ee}_rows.csv'), policy_parameter_array, delimiter=',')
+                np.savetxt(os.path.join(backup_directory, f'policy_parameter_path_{reward_column_name}_rewards_backup_after_{ee}_rows_and_approx_{int(deepcopy(mp_current_episode.value))}_episodes.csv'), policy_parameter_array, delimiter=',')
 
 
 
@@ -376,7 +377,7 @@ def launch_one_actor_critic_process(mp_w_array,
             break
 
 
-        # Resetting a couple of key parameters after the episode, to be sure we become aware when they are accidentaly reused
+        # Resetting a couple of key assignments after the episode, to be sure we become aware when they are accidentaly reused
         # in evaluation below or the next episode as most variables here are in the main functions environment.
         # Make code more functional in the future to avoid such hacks
         s0 = 42
@@ -393,7 +394,7 @@ def launch_one_actor_critic_process(mp_w_array,
         ##
 
 
-        if process_number == 1 and (ee == 1 or (current_ee_representative_process % evaluation_every_nn_episodes == 0)) and final_eval_period_flag == False:
+        if process_number == 1 and (ee == 1 or ((current_ee_representative_process-last_eval) >= evaluation_every_nn_episodes)) and final_eval_period_flag == False:
 
             if ee == 1:
 
@@ -613,10 +614,10 @@ def launch_one_actor_critic_process(mp_w_array,
             # plt.show() # muted on fabian
 
             # Saving a backup plot each few thousand observations
-            if int(current_ee) % 5000 == 0:
+            if int(current_ee - last_plot) > 1000:
 
-                plt.savefig(os.path.join(backup_directory, f'reward_trajectory_{reward_column_name}_rewards_after_{int(current_ee)}_episodes.pdf'), dpi = 300) # save extra plot every x-1000 episodes
-
+                plt.savefig(os.path.join(backup_directory, f'reward_trajectory_{reward_column_name}_rewards_after_approx_{int(current_ee)}_episodes.pdf'), dpi = 300) # save extra plot every x-1000 episodes
+                last_plot = deepcopy(current_ee)
 
 
 
@@ -670,9 +671,6 @@ if __name__ == "__main__":
     # Normalisation of the rewards (note: rewards are additionally scalled by their standard deviation)
     reward_normalisation = 6400
 
-    ## Total episodes
-    EE = 101000 # ensures that a figure exists for exactly 100,000 episodes
-
     # Costs per treatment
     cost_per_treatment = 1/6400
 
@@ -693,15 +691,18 @@ if __name__ == "__main__":
     # Standard OLS rewards
     if reward_option == 1:
 
+        # Total episodes
+        EE = 11000 # ensures that a figure exists for exactly 10,000 episodes
+
         # Name of rewards used
         reward_column_name = "Rlr1"
 
         # Learning rate
-        alpha_theta = 0.3 # 0.8/10 worked well before recent changes in arrival etc
-        alpha_w = 5
+        alpha_theta = 0.8 # 0.3/5 worked well in an older version
+        alpha_w = 10
 
         # Batch size
-        batch_size = 128
+        batch_size = 512
 
         # Evaluation specifics
         evaluation_episodes = 500
@@ -713,12 +714,15 @@ if __name__ == "__main__":
     # Doubly robust OLS cross fitted rewards
     elif reward_option == 2:
 
+        ## Total episodes
+        EE = 51000 # ensures that a figure exists for exactly 50,000 episodes
+
         # Name of rewards used
         reward_column_name = "d_rob_ols_Xfit"
 
         # Learning rates
-        alpha_theta = 0.1 #
-        alpha_w = 0.2 #
+        alpha_theta = 0.3 # 0.15 works
+        alpha_w = 0.6 # 0.3 works
 
         # Batch size
         batch_size = 1024
@@ -726,7 +730,6 @@ if __name__ == "__main__":
         # Evaluation specifics
         evaluation_episodes = 500
         evaluation_every_nn_episodes = 500 # works because N evaluation episode take less time than N training episodes because no function approximator updates happen in evaluation
-
 
 
     #############################################################################################################################
