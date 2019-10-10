@@ -342,29 +342,45 @@ def launch_one_actor_critic_process(mp_w_array,
             if ee == 1:
 
                 policy_parameter_array = np.ones([0, len(function_approximators_object.theta[:])])
-                np.savetxt(os.path.join(output_directory, f'policy_parameter_path_{reward_column_name}_rewards.csv'), policy_parameter_array, delimiter=',')
+                np.savetxt(os.path.join(output_directory, f'policy_parameter_path.csv'), policy_parameter_array, delimiter=',')
+
+                value_parameter_array = np.ones([0, len(function_approximators_object.w[:])])
+                np.savetxt(os.path.join(output_directory, f'value_parameter_path.csv'), value_parameter_array, delimiter=',')
 
 
             # In subsequent episodes, this array will be loaded, updated with the current parameter values, and saved again
             else:
 
-                policy_parameter_array = np.loadtxt(os.path.join(output_directory, f'policy_parameter_path_{reward_column_name}_rewards.csv'), delimiter=',')
+                policy_parameter_array = np.loadtxt(os.path.join(output_directory, f'policy_parameter_path.csv'), delimiter=',')
+                value_parameter_array = np.loadtxt(os.path.join(output_directory, f'value_parameter_path.csv'), delimiter=',')
+
+
+                # Reshaping relevant for first observation
                 if len(policy_parameter_array.shape) == 1:
 
                     policy_parameter_array = policy_parameter_array.reshape(1, policy_parameter_array.shape[0])
 
-            copy_parameters = deepcopy(function_approximators_object.theta[:])
+                if len(value_parameter_array.shape) == 1:
 
-            policy_parameter_array = np.vstack([policy_parameter_array, np.array(copy_parameters).reshape(1, len(copy_parameters))])
-            np.savetxt(os.path.join(output_directory, f'policy_parameter_path_{reward_column_name}_rewards.csv'), policy_parameter_array, delimiter=',')
+                    value_parameter_array = value_parameter_array.reshape(1, value_parameter_array.shape[0])
+
+            copy_policy_parameters = deepcopy(function_approximators_object.theta[:])
+            copy_value_parameters = deepcopy(function_approximators_w.theta[:])
+
+            # Updating the parameter paths
+            policy_parameter_array = np.vstack([policy_parameter_array, np.array(copy_policy_parameters).reshape(1, len(copy_policy_parameters))])
+            np.savetxt(os.path.join(output_directory, f'policy_parameter_path.csv'), policy_parameter_array, delimiter=',')
+            value_parameter_array = np.vstack([value_parameter_array, np.array(copy_value_parameters).reshape(1, len(copy_value_parameters))])
+            np.savetxt(os.path.join(output_directory, f'value_parameter_path.csv'), value_parameter_array, delimiter=',')
+
 
             # Saving a backup plot each few thousand observations
-            if ee % 2500 == 0:
+            if ee % 2000 == 0:
 
                 # Note: They will not contain current_ee coefficient path steps, because the process saving them is actually slower than the other processes
                 # Hence, say the coefficient saved at step 80,000 could be the values achieved after 100,000 episodes of training in the other processes
-                np.savetxt(os.path.join(backup_directory, f'policy_parameter_path_{reward_column_name}_rewards_backup_after_{ee}_rows_and_approx_{int(deepcopy(mp_current_episode.value))}_episodes.csv'), policy_parameter_array, delimiter=',')
-
+                np.savetxt(os.path.join(backup_directory, f'policy_parameter_path_backup_after_{ee}_rows_and_approx_{int(deepcopy(mp_current_episode.value))}_episodes.csv'), policy_parameter_array, delimiter=',')
+                np.savetxt(os.path.join(backup_directory, f'value_parameter_path_backup_after_{ee}_rows_and_approx_{int(deepcopy(mp_current_episode.value))}_episodes.csv'), value_parameter_array, delimiter=',')
 
 
         # Creating a copy of the current episode of training
@@ -692,17 +708,17 @@ if __name__ == "__main__":
     if reward_option == 1:
 
         # Total episodes
-        EE = 11000 # ensures that a figure exists for exactly 10,000 episodes
+        EE = 51000 # ensures that a figure exists for exactly 50,000 episodes, however, probably will not be reached for plain OLS in 7 days
 
         # Name of rewards used
         reward_column_name = "Rlr1"
 
         # Learning rate
-        alpha_theta = 0.8 # 0.3/5 worked well in an older version
-        alpha_w = 10
+        alpha_theta = 0.6 # 0.3/0.6 worked well
+        alpha_w = 1.2
 
         # Batch size
-        batch_size = 512
+        batch_size = 1024 # probably larger than necessary, but makes it comparable to doubly robust
 
         # Evaluation specifics
         evaluation_episodes = 500
