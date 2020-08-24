@@ -44,11 +44,11 @@ which runs the model with doubly robust rewards, a value function learning rate 
 
 First input: 0 - standard ols rewards, 1 - doubly robust rewards
 
-Second input: 0 - value function learning rate 0.001, 1 - value function learning rate 0.001, 2 - value function learning rate 0.1
+Second input: 0 - value function learning rate 0.001, 1 - value function learning rate 0.01, 2 - value function learning rate 0.1
 
 Third input: 0 - policy function learning rate 0.5, 1 - policy function learning rate 5, 2 - policy function learning rate 50
 
-Fourth input: 0 - value basis function parametrisation with 9 terms, 1 - value basis function parametrisation with 11 terms, 2 - value basis function parametrisation with 13 terms
+Fourth input: 0 - value basis function parameterization with 9 terms, 1 - value basis function parameterization with 11 terms, 2 - value basis function parameterization with 13 terms
 
 (see folder 3_reinforcement_learning)
 
