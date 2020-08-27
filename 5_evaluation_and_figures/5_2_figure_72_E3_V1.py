@@ -3,7 +3,7 @@
 Code for: DYNAMICALLY OPTIMAL TREATMENT ALLOCATION USING REINFORCEMENT LEARNING
 by Karun Adusumilli, Friedrich Geiecke, and Claudio Schilter
 
-This code: create Figures 7.2, E.3, and E.4
+This code: create Figures 7.2, E.3, and V.1
 
 Prerequisite: runs completed for DR rewards (with and without budget/time) and std OLS rewards
 """
@@ -25,7 +25,7 @@ os.chdir("C:\\Users\\ClaudioSchilter\\Dropbox\\Reinforcement_learning\\")
 folder="fabian_outcomes_to_analyse\\paper\\run_2020_07_21_001221_1_1_0\\"
 folder2="fabian_outcomes_to_analyse\\paper\\run_2020_07_22_235745_1_1_0_without_budget_time\\"
 
-#For Figure E.4 (std OLS rewards)
+#For Figure V.1 (std OLS rewards)
 #folder="fabian_outcomes_to_analyse\\paper\\run_2020_07_21_001159_1_1_0\\"
 
 #For Figure E.3 (no age)
@@ -36,7 +36,7 @@ folder2="fabian_outcomes_to_analyse\\paper\\run_2020_07_22_235745_1_1_0_without_
 xaxis = pd.read_csv(folder+"x_axis_for_rewards_d_rob_ols_Xfit.csv",header=None)
 yaxis = pd.read_csv(folder+"y_axis_for_rewards_d_rob_ols_Xfit.csv",header=None)
 
-#For Figure E.4
+#For Figure V.1
 #xaxis = pd.read_csv(folder+"x_axis_for_rewards_Rlr1.csv",header=None)
 #yaxis = pd.read_csv(folder+"y_axis_for_rewards_Rlr1.csv",header=None)
 
@@ -74,7 +74,7 @@ xaxis2 = xaxis2[0:161]
 #KT for doubly robust (Figure 7.2):
 KT_welfare = 0.0098917
 
-#KT for ols (Figure E.4):
+#KT for ols (Figure V.1):
 #KT_welfare = 0.4285785
 
 #KT no age  (Figure E.3):
@@ -89,9 +89,9 @@ sns.set(font_scale=3)
 plt.figure(123, figsize=(35,10))
 plt.rc('font', family='serif')
 
-#labelling and saving set up for Figure 7.2 (change accordingly for E.3 and E.4)
-plt.plot(xaxis, yaxis/yaxis[0], linestyle='--', marker='o',linewidth=4, markersize=13, color=palette_used[8], label="Policy Function")
-plt.plot(xaxis2, yaxis2/yaxis2[0], linestyle='--', marker='o',linewidth=4, markersize=13, color=palette_used[2], label="Restricted Policy Function")
+#labelling and saving set up for Figure 7.2 (change accordingly for E.3 and V.1)
+plt.plot(xaxis, yaxis/yaxis[0], linestyle='--', marker='o',linewidth=4, markersize=13, color=palette_used[8], label="Dynamic Policy")
+plt.plot(xaxis2, yaxis2/yaxis2[0], linestyle='--', marker='o',linewidth=4, markersize=13, color=palette_used[2], label="Restricted Policy")
 plt.axhline(KT_welfare/yaxis[0], linestyle='-', linewidth=4, color=palette_used[4], label="EWM Policy")
 plt.legend(loc="lower right")
 plt.rc('font', family='serif')

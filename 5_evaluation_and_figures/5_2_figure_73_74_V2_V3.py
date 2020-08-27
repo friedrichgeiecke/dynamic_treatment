@@ -3,7 +3,7 @@
 Code for: DYNAMICALLY OPTIMAL TREATMENT ALLOCATION USING REINFORCEMENT LEARNING
 by Karun Adusumilli, Friedrich Geiecke, and Claudio Schilter
 
-This code: generate figures 7.3, 7.4 and E.5, E.6
+This code: generate figures 7.3, 7.4 and V.2, V.3
 (depending on if DR or OLS folder is chosen initially)
 
 prerequisites: having obtained the policy parameter paths
@@ -32,7 +32,7 @@ os.chdir("C:\\Users\\ClaudioSchilter\\Dropbox\\Reinforcement_learning\\")
 # Folder where the RL policy is saved in
 #DR (figure 7.3 and 7.4)
 folder="fabian_outcomes_to_analyse\\paper\\run_2020_07_21_001221_1_1_0\\"
-#OLS (figure E.5 and E.6)
+#OLS (figure V.2 and V.3)
 #folder="fabian_outcomes_to_analyse\\paper\\run_2020_07_21_00159_1_1_0\\"
 
 # Style of graphs
