@@ -3,7 +3,7 @@
 Code for: DYNAMICALLY OPTIMAL TREATMENT ALLOCATION USING REINFORCEMENT LEARNING
 by Karun Adusumilli, Friedrich Geiecke, and Claudio Schilter
 
-This code: generate figures 7.3, 7.4 and V.2, V.3
+This code: generate figures 7.3, 7.4 and VI.3, VI.4
 (depending on if DR or OLS folder is chosen initially)
 
 prerequisites: having obtained the policy parameter paths
@@ -32,7 +32,7 @@ os.chdir("C:\\Users\\ClaudioSchilter\\Dropbox\\Reinforcement_learning\\")
 # Folder where the RL policy is saved in
 #DR (figure 7.3 and 7.4)
 folder="fabian_outcomes_to_analyse\\paper\\run_2020_07_21_001221_1_1_0\\"
-#OLS (figure V.2 and V.3)
+#OLS (figure VI.3 and VI.4)
 #folder="fabian_outcomes_to_analyse\\paper\\run_2020_07_21_00159_1_1_0\\"
 
 # Style of graphs
@@ -42,6 +42,8 @@ palette_used = sns.color_palette("husl", 12)
 sns.set(font_scale=2)
 mesh_fineness = 0.001
 total_budget = 1
+sns.set(font_scale=3)
+plt.rc('font', family='serif')
 
 # Load the dynamic policy function (see other Python code)
 dataset = pd.read_csv(folder+"policy_parameter_path.csv")
@@ -81,7 +83,7 @@ for x in np.arange(0, 12, 1):
     plt.ylabel("Parameter Value")
     plt.rc('font', family='serif')
 #    plt.legend(bbox_to_anchor=(1.04,0.5), loc="center left", borderaxespad=0)
-    plt.legend(bbox_to_anchor=(0.5,-0.1), loc="upper center",ncol=4, borderaxespad=0)
+    plt.legend(bbox_to_anchor=(0.5,-0.1), loc="upper center",ncol=3, borderaxespad=0)
     plt.rc('font', family='serif')
     plt.show
 
@@ -99,7 +101,7 @@ for x in np.arange(1, 12, 1):
     plt.ylabel("Parameter Value Relative to Intercept")
     plt.rc('font', family='serif')
 #    plt.legend(bbox_to_anchor=(1.04,0.5), loc="center left", borderaxespad=0)
-    plt.legend(bbox_to_anchor=(0.5,-0.1), loc="upper center",ncol=4, borderaxespad=0)
+    plt.legend(bbox_to_anchor=(0.5,-0.1), loc="upper center",ncol=3, borderaxespad=0)
     plt.rc('font', family='serif')
     plt.show
 
@@ -134,7 +136,7 @@ pcolor(t, b, Z, cmap = husl_map_part_used)
 plt.colorbar(orientation="horizontal")
 plt.show
 
-plt.savefig(folder+"age_coef.pdf", bbox_inches = 'tight',
+plt.savefig(folder+"age_coef.png", bbox_inches = 'tight',
     pad_inches = 0)
 
 #education
@@ -148,7 +150,7 @@ pcolor(t, b, Z, cmap = husl_map_part_used)
 plt.colorbar(orientation="horizontal")
 plt.show
 
-plt.savefig(folder+"edu_coef.pdf",bbox_inches = 'tight',
+plt.savefig(folder+"edu_coef.png",bbox_inches = 'tight',
     pad_inches = 0)
 
 #prev earnings
@@ -162,7 +164,7 @@ pcolor(t, b, Z, cmap = husl_map_part_used)
 plt.colorbar(orientation="horizontal")
 plt.show
 
-plt.savefig(folder+"prev_earn_coef.pdf",bbox_inches = 'tight',
+plt.savefig(folder+"prev_earn_coef.png",bbox_inches = 'tight',
     pad_inches = 0)
 
 

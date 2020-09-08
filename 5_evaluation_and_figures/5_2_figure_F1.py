@@ -3,7 +3,7 @@
 Code for: DYNAMICALLY OPTIMAL TREATMENT ALLOCATION USING REINFORCEMENT LEARNING
 by Karun Adusumilli, Friedrich Geiecke, and Claudio Schilter
 
-This code: produce figure E.1 (illustrating arrival of individuals from different clusters)
+This code: produce figure F.1 (illustrating arrival of individuals from different clusters)
 
 Prerequisites: stata code ran
 """

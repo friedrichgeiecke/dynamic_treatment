@@ -2,10 +2,10 @@
 Code for: DYNAMICALLY OPTIMAL TREATMENT ALLOCATION USING REINFORCEMENT LEARNING
 by Karun Adusumilli, Friedrich Geiecke, and Claudio Schilter
 
-This code: generate figures 7.2 and V.4
+This code: generate figures VI.1 and VI.5
 
 Part 1: functions
-Part 2: simulation (choose setup there accordingly for either figure 7.2 or V.4)
+Part 2: simulation (choose setup there accordingly for either figure VI.1 or VI.5)
 Part 3: creation of figures
 
 
@@ -596,9 +596,7 @@ if simulation above already run, can also start simply from here
     plt.yticks(fontsize=10)
     
     plt.savefig(local_directory+folder+"pickiness_bymonth.pdf")
-    
-    #keep in mind, now limited to 1 year: so should be less picky at the end as else have wasted budget!!!
-    
+      
     
     
     fig, bscatter = plt.subplots(1)

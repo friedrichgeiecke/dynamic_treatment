@@ -3,7 +3,7 @@
 Code for: DYNAMICALLY OPTIMAL TREATMENT ALLOCATION USING REINFORCEMENT LEARNING
 by Karun Adusumilli, Friedrich Geiecke, and Claudio Schilter
 
-This code: create figure E.2
+This code: create figure F.2
 
 Run separately for each subplot (comment/uncomment code lines accordingly)
 
