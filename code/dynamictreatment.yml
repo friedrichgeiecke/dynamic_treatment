@@ -1,0 +1,12 @@
+name: dynamictreatment
+channels:
+  - conda-forge
+  - defaults
+dependencies:
+  - python
+  - mpi4py
+  - numpy
+  - pandas
+  - scikit-learn
+  - pytorch::pytorch
+  - pytorch::torchvision
